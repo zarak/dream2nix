@@ -1,10 +1,11 @@
 {
   # from nixpkgs
-  python3,
-  writeScript,
+  python3
+,
+  writeScript
+,
   ...
 }:
-
 let
   cliPython = python3.withPackages (ps: [ ps.cleo ]);
 in

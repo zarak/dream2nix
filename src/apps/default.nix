@@ -1,17 +1,18 @@
 {
-  lib,
-  pkgs,
-
+  lib
+,
+  pkgs
+,
   # dream2nix
-  callPackageDream,
-  translators,
+  callPackageDream
+,
+  translators
+,
   ...
 }:
-
 let
   b = builtins;
 in
-
 rec {
   apps = {
     inherit cli contribute install;
@@ -19,19 +20,20 @@ rec {
   };
 
   flakeApps =
-    lib.mapAttrs (appName: app:
-      {
+    lib.mapAttrs (
+      appName: app: {
         type = "app";
         program = b.toString app.program;
       }
-    ) apps;
+    )
+    apps;
 
   # the dream2nix cli
-  cli = callPackageDream (import ./cli) {};
+  cli = callPackageDream (import ./cli) { };
 
   # the contribute cli
-  contribute = callPackageDream (import ./contribute) {};
+  contribute = callPackageDream (import ./contribute) { };
 
   # instrall the framework to a specified location by copying the code
-  install = callPackageDream (import ./install) {};
+  install = callPackageDream (import ./install) { };
 }

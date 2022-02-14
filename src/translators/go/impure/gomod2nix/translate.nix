@@ -1,6 +1,4 @@
-dream2nixWithExternals:
-cwd:
-let
+dream2nixWithExternals: cwd: let
   dream2nix = import dream2nixWithExternals { };
   b = builtins;
   parsed = b.fromTOML (builtins.readFile "${cwd}/gomod2nix.toml");
@@ -8,18 +6,19 @@ let
   lib = pkgs.lib;
   serializePackages = inputData:
     lib.mapAttrsToList
-      (goName: depAttrs: depAttrs // { inherit goName; })
-      parsed;
+    (goName: depAttrs: depAttrs // { inherit goName; })
+    parsed;
   translated =
     dream2nix.utils.simpleTranslate
-      ({
-        getDepByNameVer,
-        dependenciesByOriginalID,
+    (
+      {
+        getDepByNameVer
+      ,
+        dependenciesByOriginalID
+      ,
         ...
       }:
-
       rec {
-
         translatorName = "gomod2nix";
 
         inputData = parsed;
@@ -40,11 +39,13 @@ let
 
         mainPackageDependencies =
           lib.forEach
-            (serializePackages parsed)
-            (dep: {
-                name = getName dep;
-                version = getVersion dep;
-            });
+          (serializePackages parsed)
+          (
+            dep: {
+              name = getName dep;
+              version = getVersion dep;
+            }
+          );
 
         getOriginalID = dependencyObject:
           null;
@@ -55,21 +56,19 @@ let
         getVersion = dependencyObject:
           lib.removePrefix "v" dependencyObject.sumVersion;
 
-        getDependencies = dependencyObject:
-          [];
+        getDependencies = dependencyObject: [ ];
 
         getSourceType = dependencyObject: "git";
 
         sourceConstructors = {
-          git = dependencyObject:
-            {
-              type = "git";
-              hash = dependencyObject.fetch.sha256;
-              url = dependencyObject.fetch.url;
-              rev = dependencyObject.fetch.rev;
-            };
+          git = dependencyObject: {
+            type = "git";
+            hash = dependencyObject.fetch.sha256;
+            url = dependencyObject.fetch.url;
+            rev = dependencyObject.fetch.rev;
+          };
         };
-
-      });
+      }
+    );
 in
   dream2nix.utils.dreamLock.toJSON translated

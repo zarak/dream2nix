@@ -1,14 +1,17 @@
 {
-  fetchFromGitHub,
-  lib,
-  nix,
-  runCommand,
-
-  utils,
+  fetchFromGitHub
+,
+  lib
+,
+  nix
+,
+  runCommand
+,
+  utils
+,
   ...
 }:
 {
-
   inputs = [
     "owner"
     "repo"
@@ -19,20 +22,27 @@
 
   defaultUpdater = "githubNewestReleaseTag";
 
-  outputs = { owner, repo, rev, ... }@inp:
+  outputs =
+    { owner
+    , repo
+    , rev
+    , ...
+    }
+    @ inp:
     let
       b = builtins;
     in
-    {
+      {
+        calcHash = algo:
+          utils.hashPath algo (
+            b.fetchTarball {
+              url = "https://github.com/${owner}/${repo}/tarball/${rev}";
+            }
+          );
 
-      calcHash = algo: utils.hashPath algo (b.fetchTarball {
-        url = "https://github.com/${owner}/${repo}/tarball/${rev}";
-      });
-
-      fetched = hash:
-        fetchFromGitHub {
-          inherit owner repo rev hash;
-        };
-
-    };
+        fetched = hash:
+          fetchFromGitHub {
+            inherit owner repo rev hash;
+          };
+      };
 }

@@ -1,20 +1,20 @@
 {
-  lib,
-
+  lib
+,
   # dream2nix
-  apps,
-  utils,
+  apps
+,
+  utils
+,
   ...
 }:
 let
-
   l = lib // builtins;
 
   cli = apps.cli.program;
-
 in
 utils.writePureShellScript
-[]
+[ ]
 ''
   ${cli} add github:mattermost/mattermost-webapp/v6.1.0 \
     --no-default-nix \

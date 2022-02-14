@@ -23,9 +23,7 @@
 , libXdamage
 , nss
 }:
-
-version: hashes:
-let
+version: hashes: let
   name = "electron-${version}";
 
   meta = with lib; {
@@ -33,20 +31,23 @@ let
     homepage = "https://github.com/electron/electron";
     license = licenses.mit;
     maintainers = with maintainers; [ travisbhartwell manveru prusnak ];
-    platforms = [ "x86_64-darwin" "x86_64-linux" "i686-linux" "armv7l-linux" "aarch64-linux" ]
+    platforms =
+      [ "x86_64-darwin" "x86_64-linux" "i686-linux" "armv7l-linux" "aarch64-linux" ]
       ++ optionals (versionAtLeast version "11.0.0") [ "aarch64-darwin" ];
     knownVulnerabilities = optional (versionOlder version "12.0.0") "Electron version ${version} is EOL";
   };
 
-  fetcher = vers: tag: hash: fetchurl {
-    url = "https://github.com/electron/electron/releases/download/v${vers}/electron-v${vers}-${tag}.zip";
-    sha256 = hash;
-  };
+  fetcher = vers: tag: hash:
+    fetchurl {
+      url = "https://github.com/electron/electron/releases/download/v${vers}/electron-v${vers}-${tag}.zip";
+      sha256 = hash;
+    };
 
-  headersFetcher = vers: hash: fetchurl {
-    url = "https://atom.io/download/electron/v${vers}/node-v${vers}-headers.tar.gz";
-    sha256 = hash;
-  };
+  headersFetcher = vers: hash:
+    fetchurl {
+      url = "https://atom.io/download/electron/v${vers}/node-v${vers}-headers.tar.gz";
+      sha256 = hash;
+    };
 
   tags = {
     i686-linux = "linux-ia32";
@@ -57,8 +58,9 @@ let
     aarch64-darwin = "darwin-arm64";
   };
 
-  get = as: platform: as.${platform.system} or
-    "Unsupported system: ${platform.system}";
+  get = as: platform:
+    as.${platform.system} or
+      "Unsupported system: ${platform.system}";
 
   common = platform: {
     inherit name version meta;
@@ -66,7 +68,8 @@ let
     passthru.headers = headersFetcher version hashes.headers;
   };
 
-  electronLibs = with lib;
+  electronLibs =
+    with lib;
     [
       alsa-lib
       at-spi2-atk
@@ -78,9 +81,9 @@ let
       libXScrnSaver
       nss
     ]
-    ++ optionals (! versionOlder version "9.0.0") [ libdrm mesa ]
-    ++ optionals (! versionOlder version "11.0.0") [ libxkbcommon ]
-    ++ optionals (! versionOlder version "12.0.0") [ libxshmfence ];
+    ++ optionals (!versionOlder version "9.0.0") [ libdrm mesa ]
+    ++ optionals (!versionOlder version "11.0.0") [ libxkbcommon ]
+    ++ optionals (!versionOlder version "12.0.0") [ libxshmfence ];
 
   electronLibPath = with lib; makeLibraryPath electronLibs;
 
@@ -96,7 +99,8 @@ let
       wrapGAppsHook
     ];
 
-    dontWrapGApps = true; # electron is in lib, we need to wrap it manually
+    dontWrapGApps = true;
+    # electron is in lib, we need to wrap it manually
 
     dontUnpack = true;
     dontBuild = true;
@@ -131,6 +135,11 @@ let
   };
 in
   stdenv.mkDerivation (
-    (common stdenv.hostPlatform) //
-    (if stdenv.isDarwin then darwin else linux)
+    (common stdenv.hostPlatform)
+    //
+    (
+      if stdenv.isDarwin
+      then darwin
+      else linux
+    )
   )

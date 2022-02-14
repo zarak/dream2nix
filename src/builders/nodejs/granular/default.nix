@@ -1,71 +1,85 @@
 {
-  jq,
-  lib,
-  makeWrapper,
-  pkgs,
-  python3,
-  runCommand,
-  stdenv,
-  writeText,
-
+  jq
+,
+  lib
+,
+  makeWrapper
+,
+  pkgs
+,
+  python3
+,
+  runCommand
+,
+  stdenv
+,
+  writeText
+,
   # dream2nix inputs
-  builders,
-  externals,
-  utils,
+  builders
+,
+  externals
+,
+  utils
+,
   ...
 }:
-
 {
   # Funcs
-
   # AttrSet -> Bool) -> AttrSet -> [x]
-  getCyclicDependencies,        # name: version: -> [ {name=; version=; } ]
-  getDependencies,              # name: version: -> [ {name=; version=; } ]
-  getSource,                    # name: version: -> store-path
-  buildPackageWithOtherBuilder, # { builder, name, version }: -> drv
-
+  getCyclicDependencies
+, # name: version: -> [ {name=; version=; } ]
+  getDependencies
+, # name: version: -> [ {name=; version=; } ]
+  getSource
+, # name: version: -> store-path
+  buildPackageWithOtherBuilder
+, # { builder, name, version }: -> drv
   # Attributes
-  subsystemAttrs,       # attrset
-  defaultPackageName,      # string
-  defaultPackageVersion,   # string
-
+  subsystemAttrs
+, # attrset
+  defaultPackageName
+, # string
+  defaultPackageVersion
+, # string
   # attrset of pname -> versions,
   # where versions is a list of version strings
-  packageVersions,
-
+  packageVersions
+,
   # function which applies overrides to a package
   # It must be applied by the builder to each individual derivation
   # Example:
   #   produceDerivation name (mkDerivation {...})
-  produceDerivation,
-
+  produceDerivation
+,
   # Custom Options: (parametrize builder behavior)
   # These can be passed by the user via `builderArgs`.
   # All options must provide default
-  standalonePackageNames ? [],
-
-  nodejs ? null,
+  standalonePackageNames ? [ ]
+,
+  nodejs ? null
+,
   ...
-}@args:
-
+}
+@ args:
 let
-
   b = builtins;
 
   nodejsVersion = subsystemAttrs.nodejsVersion;
 
   isMainPackage = name: version:
-    name == defaultPackageName
+    name
+    == defaultPackageName
     && version == defaultPackageVersion;
 
   nodejs =
-    if args ? nodejs then
-      args.nodejs
+    if args ? nodejs
+    then args.nodejs
     else
       pkgs."nodejs-${builtins.toString nodejsVersion}_x"
-      or (throw "Could not find nodejs version '${nodejsVersion}' in pkgs");
+        or (throw "Could not find nodejs version '${nodejsVersion}' in pkgs");
 
-  nodeSources = runCommand "node-sources" {} ''
+  nodeSources = runCommand "node-sources" { } ''
     tar --no-same-owner --no-same-permissions -xf ${nodejs.src}
     mv node-* $out
   '';
@@ -74,12 +88,16 @@ let
 
   packages =
     lib.mapAttrs
-      (name: versions:
+    (
+      name: versions:
         lib.genAttrs
-          versions
-          (version:
-              makePackage name version))
-      packageVersions;
+        versions
+        (
+          version:
+            makePackage name version
+        )
+    )
+    packageVersions;
 
   outputs = {
     inherit defaultPackage packages;
@@ -148,51 +166,51 @@ let
   '';
 
   # Generates a derivation for a specific package name + version
-  makePackage = name: version:
-    let
+  makePackage = name: version: let
+    deps = getDependencies name version;
 
-      deps = getDependencies name version;
+    nodeDeps =
+      lib.forEach
+      deps
+      (dep: packages."${dep.name}"."${dep.version}");
 
-      nodeDeps =
-        lib.forEach
-          deps
-          (dep: packages."${dep.name}"."${dep.version}" );
+    dependenciesJson = b.toJSON
+    (
+      lib.listToAttrs
+      (
+        b.map
+        (dep: lib.nameValuePair dep.name dep.version)
+        deps
+      )
+    );
 
-      dependenciesJson = b.toJSON
-        (lib.listToAttrs
-          (b.map
-            (dep: lib.nameValuePair dep.name dep.version)
-            deps));
+    electronDep =
+      if !isMainPackage name version
+      then null
+      else
+        lib.findFirst
+        (dep: dep.name == "electron")
+        null
+        deps;
 
-      electronDep =
-        if ! isMainPackage name version then
-          null
-        else
-          lib.findFirst
-            (dep: dep.name == "electron")
-            null
-            deps;
+    electronVersionMajor =
+      lib.versions.major electronDep.version;
 
-      electronVersionMajor =
-        lib.versions.major electronDep.version;
+    electronHeaders =
+      if electronDep == null
+      then null
+      else pkgs."electron_${electronVersionMajor}".headers;
 
-      electronHeaders =
-        if electronDep == null then
-          null
-        else
-          pkgs."electron_${electronVersionMajor}".headers;
-
-
-      pkg =
-        produceDerivation name (stdenv.mkDerivation rec {
-
+    pkg =
+      produceDerivation name (
+        stdenv.mkDerivation rec {
           inherit
             dependenciesJson
             electronHeaders
             nodeDeps
             nodeSources
             version
-          ;
+            ;
 
           packageName = name;
 
@@ -258,10 +276,9 @@ let
           # example which requires this:
           #   https://registry.npmjs.org/react-window-infinite-loader/-/react-window-infinite-loader-1.0.7.tgz
           unpackCmd =
-            if lib.hasSuffix ".tgz" src then
-              "tar --delay-directory-restore -xf $src"
-            else
-              null;
+            if lib.hasSuffix ".tgz" src
+            then "tar --delay-directory-restore -xf $src"
+            else null;
 
           unpackPhase = ''
             runHook preUnpack
@@ -440,10 +457,9 @@ let
 
             runHook postInstall
           '';
-        });
-    in
-      pkg;
-
+        }
+      );
+  in
+    pkg;
 in
 outputs
-

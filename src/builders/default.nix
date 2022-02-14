@@ -1,28 +1,28 @@
 {
-  builders,
-  callPackageDream,
+  builders
+,
+  callPackageDream
+,
   ...
 }:
 {
-  python =  rec {
-
+  python = rec {
     default = simpleBuilder;
 
-    simpleBuilder = callPackageDream ./python/simple-builder {};
+    simpleBuilder = callPackageDream ./python/simple-builder { };
   };
 
-  nodejs =  rec {
-
+  nodejs = rec {
     default = granular;
 
-    node2nix = callPackageDream ./nodejs/node2nix {};
+    node2nix = callPackageDream ./nodejs/node2nix { };
 
     granular = callPackageDream ./nodejs/granular { inherit builders; };
   };
-  
+
   rust = rec {
     default = buildRustPackage;
 
-    buildRustPackage = callPackageDream ./rust/build-rust-package {};
+    buildRustPackage = callPackageDream ./rust/build-rust-package { };
   };
 }

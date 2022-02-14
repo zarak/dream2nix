@@ -1,20 +1,20 @@
 {
-  lib,
-
+  lib
+,
   # dream2nix
-  apps,
-  utils,
+  apps
+,
+  utils
+,
   ...
 }:
 let
-
   l = lib // builtins;
 
   cli = apps.cli.program;
-
 in
 utils.writePureShellScript
-[]
+[ ]
 ''
   ${cli} add github:prettier/prettier/2.4.1 \
     --no-default-nix \

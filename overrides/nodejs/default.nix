@@ -1,12 +1,13 @@
 {
-  lib,
-  pkgs,
-
+  lib
+,
+  pkgs
+,
   # dream2nix
-  satisfiesSemver,
+  satisfiesSemver
+,
   ...
 }:
-
 let
   l = lib // builtins;
 
@@ -29,12 +30,9 @@ let
       exit 1
     fi
   '';
-
 in
-
 ## OVERRIDES
 {
-
   atom = {
     build = {
       buildScript = ''
@@ -61,16 +59,16 @@ in
 
   cpu-features = {
     add-inputs = {
-      nativeBuildInputs = old: old ++ [
-        pkgs.cmake
-      ];
+      nativeBuildInputs = old:
+        old
+        ++ [
+          pkgs.cmake
+        ];
     };
   };
 
   css-loader = {
-
     disable-source-map-v4-v5 = {
-
       _condition = pkg:
         satisfiesSemver "^4.0.0" pkg
         || satisfiesSemver "^5.0.0" pkg;
@@ -84,17 +82,13 @@ in
   };
 
   cypress = {
-
     add-binary = {
-
       dontBuild = true;
     };
   };
 
   "draw.io" = {
-
     build = {
-
       buildScript = ''
         mkdir $out/bin
         makeWrapper \
@@ -107,9 +101,7 @@ in
   };
 
   dugite = {
-
     add-git = {
-
       buildScript = ''
         ln -s ${pkgs.git} ./git
       '';
@@ -117,80 +109,87 @@ in
   };
 
   edex-ui = {
-
     build = {
-
       electronAppDir = "src";
 
-      preBuild = { outputs, ... }: ''
-        # link dependencies of subpackage
-        ln -s \
-          ${outputs.subPackages.edex-ui-subpackage.packages.edex-ui-subpackage}/lib/node_modules/edex-ui-subpackage/node_modules \
-          ./src/node_modules
+      preBuild =
+        { outputs
+        , ...
+        }:
+        ''
+          # link dependencies of subpackage
+          ln -s \
+            ${outputs.subPackages.edex-ui-subpackage.packages.edex-ui-subpackage}/lib/node_modules/edex-ui-subpackage/node_modules \
+            ./src/node_modules
 
-        # transform symlinked subpackage 'node-pty' to copies,
-        # in order to allow re-building
-        mv src/node_modules src/node_modules.bac
-        mkdir src/node_modules
-        cp -r src/node_modules.bac/* src/node_modules/
-        symlinksToCopies ./src/node_modules/node-pty
-      '';
+          # transform symlinked subpackage 'node-pty' to copies,
+          # in order to allow re-building
+          mv src/node_modules src/node_modules.bac
+          mkdir src/node_modules
+          cp -r src/node_modules.bac/* src/node_modules/
+          symlinksToCopies ./src/node_modules/node-pty
+        '';
     };
   };
 
   electron =
     let
-
       mkElectron =
         pkgs.callPackage
-          ./electron/generic.nix
-          {};
+        ./electron/generic.nix
+        { };
 
       nixpkgsElectrons =
         lib.mapAttrs
-          (version: hashes:
-            (mkElectron version hashes).overrideAttrs (old: {
-              dontStrip = true;
-            }))
-          hashes;
+        (
+          version: hashes:
+            (mkElectron version hashes).overrideAttrs (
+              old: {
+                dontStrip = true;
+              }
+            )
+        )
+        hashes;
 
-      getElectronFor = version:
-        let
-          semVerSpec = "~${version}";
+      getElectronFor = version: let
+        semVerSpec = "~${version}";
 
-          filteredElectrons =
-            lib.filterAttrs
-              (electronVer: _: satisfiesSemver semVerSpec {
+        filteredElectrons =
+          lib.filterAttrs
+          (
+            electronVer: _:
+              satisfiesSemver semVerSpec {
                 version = electronVer;
-              })
-              nixpkgsElectrons;
+              }
+          )
+          nixpkgsElectrons;
 
-          electrons = l.attrValues filteredElectrons;
+        electrons = l.attrValues filteredElectrons;
+      in
+        if l.length electrons == 0
+        then
+          throw ''
+            Electron binary hashes are missing for required version ${version}
+            Please add the hashes in the override below the origin of this error.
+            To get the hashes, execute:
+            ${./.}/electron/print-hashes.sh ${version}
+          ''
+        else if l.length electrons > 1
+        then
+          let
+            versionsSorted =
+              l.sort
+              (v1: v2: l.compareVersions v1 v2 == 1)
+              (l.attrNames filteredElectrons);
 
-        in
-          if l.length electrons == 0 then
+            versionsToRemove = l.tail versionsSorted;
+          in
             throw ''
-              Electron binary hashes are missing for required version ${version}
-              Please add the hashes in the override below the origin of this error.
-              To get the hashes, execute:
-              ${./.}/electron/print-hashes.sh ${version}
+              Multiple electron minor releases found.
+              Please delete the hashes for versions ${l.toString versionsToRemove}
+              in the override below the origin of this error.
             ''
-          else if l.length electrons > 1 then
-            let
-              versionsSorted =
-                l.sort
-                  (v1: v2: l.compareVersions v1 v2 == 1)
-                  (l.attrNames filteredElectrons);
-
-              versionsToRemove = l.tail versionsSorted;
-            in
-              throw ''
-                Multiple electron minor releases found.
-                Please delete the hashes for versions ${l.toString versionsToRemove}
-                in the override below the origin of this error.
-              ''
-          else
-            l.head electrons;
+        else l.head electrons;
 
       # TODO: generate more of these via the script in nixpkgs,
       #       once we feel confident about this approach
@@ -302,50 +301,49 @@ in
           headers = "1xnbzskvf8p5a07bha41qqnw1hb68f019qrda3z2jn96m3qnj46r";
         };
       };
-
     in
+      {
+        add-binary = {
+          overrideAttrs = old: {
+            postPatch = ''
+              cp -r ${getElectronFor "${old.version}"}/lib/electron ./dist
+              chmod -R +w ./dist
+              echo -n $version > ./dist/version
+              echo -n "electron" > ./path.txt
+            '';
 
-    {
-
-      add-binary = {
-
-        overrideAttrs = old: {
-          postPatch = ''
-            cp -r ${getElectronFor "${old.version}"}/lib/electron ./dist
-            chmod -R +w ./dist
-            echo -n $version > ./dist/version
-            echo -n "electron" > ./path.txt
-          '';
-
-          postFixup = ''
-            mkdir -p $out/lib
-            ln -s $(realpath ./dist) $out/lib/electron
-          '';
+            postFixup = ''
+              mkdir -p $out/lib
+              ln -s $(realpath ./dist) $out/lib/electron
+            '';
+          };
         };
       };
-    };
 
   # TODO: fix electron-builder call or find alternative
   element-desktop = {
     build = {
-
       # TODO: build rust extensions to enable searching encrypted messages
       # TODO: create lower case symlinks for all i18n strings
-      buildScript = { outputs, ... }: ''
-        npm run build:ts
-        npm run i18n
-        npm run build:res
+      buildScript =
+        { outputs
+        , ...
+        }:
+        ''
+          npm run build:ts
+          npm run i18n
+          npm run build:res
 
-        # build rust extensions
-        # npm run hak
+          # build rust extensions
+          # npm run hak
 
-        ln -s ${outputs.subPackages.element-web.packages.element-web}/lib/node_modules/element-web/webapp ./webapp
+          ln -s ${outputs.subPackages.element-web.packages.element-web}/lib/node_modules/element-web/webapp ./webapp
 
-        # ln -s ./lib/i18n/strings/en{-US,}.json
-        ln -s \
-          $(realpath ./lib/i18n/strings/en_US.json) \
-          $(realpath ./lib/i18n/strings/en-us.json)
-      '';
+          # ln -s ./lib/i18n/strings/en{-US,}.json
+          ln -s \
+            $(realpath ./lib/i18n/strings/en_US.json) \
+            $(realpath ./lib/i18n/strings/en-us.json)
+        '';
 
       # buildInputs = old: old ++ [
       #   pkgs.rustc
@@ -354,9 +352,8 @@ in
   };
 
   element-web = {
-
     build = {
-      installMethod  = "copy";
+      installMethod = "copy";
 
       # TODO: file upstream issue because of non-reproducible jitsi api file
       buildScript = ''
@@ -400,9 +397,11 @@ in
 
   fontmanager-redux = {
     add-inputs = {
-      nativeBuildInputs = old: old ++ [
-        pkgs.fontconfig
-      ];
+      nativeBuildInputs = old:
+        old
+        ++ [
+          pkgs.fontconfig
+        ];
     };
   };
 
@@ -413,9 +412,7 @@ in
   };
 
   enhanced-resolve = {
-
     fix-resolution-v4 = {
-
       _condition = satisfiesSemver "^4.0.0";
 
       # respect node path
@@ -430,7 +427,6 @@ in
     };
 
     fix-resolution-v5 = {
-
       _condition = satisfiesSemver "^5.0.0";
 
       patches = [
@@ -452,17 +448,17 @@ in
 
   keytar = {
     add-pkg-config = {
-      nativeBuildInputs = old: old ++ [
-        pkgs.libsecret
-        pkgs.pkg-config
-      ];
+      nativeBuildInputs = old:
+        old
+        ++ [
+          pkgs.libsecret
+          pkgs.pkg-config
+        ];
     };
   };
 
   ledger-live-desktop = {
-
     build = {
-
       installMethod = "copy";
 
       postPatch = ''
@@ -474,9 +470,7 @@ in
   };
 
   mattermost-desktop = {
-
     build = {
-
       postPatch = ''
         substituteInPlace webpack.config.base.js --replace \
           "git rev-parse --short HEAD" \
@@ -541,13 +535,13 @@ in
   };
 
   node-hid = {
-
     build = {
-
-      nativeBuildInputs = old: old ++ [
-        pkgs.pkg-config
-        pkgs.libusb
-      ];
+      nativeBuildInputs = old:
+        old
+        ++ [
+          pkgs.pkg-config
+          pkgs.libusb
+        ];
     };
   };
 
@@ -599,94 +593,108 @@ in
   };
 
   sodium-native = {
-
     build = {
-
-      nativeBuildInputs = old: old ++ [
-        pkgs.autoconf
-        pkgs.automake
-        pkgs.libtool
-      ];
+      nativeBuildInputs = old:
+        old
+        ++ [
+          pkgs.autoconf
+          pkgs.automake
+          pkgs.libtool
+        ];
     };
   };
 
   tabby = {
     inherit cntr;
     fix-build = {
-
       electronAppDir = "./app";
 
-      nativeBuildInputs = old: old ++ [
-        pkgs.fontconfig
-        pkgs.libsecret
-        pkgs.pkg-config
-      ];
+      nativeBuildInputs = old:
+        old
+        ++ [
+          pkgs.fontconfig
+          pkgs.libsecret
+          pkgs.pkg-config
+        ];
 
-      postPatch = { outputs, ... }:  ''
-        substituteInPlace ./scripts/vars.js --replace \
-          "exports.version = childProcess.execSync('git describe --tags', { encoding:'utf-8' })" \
-          "exports.version = '$version'"
+      postPatch =
+        { outputs
+        , ...
+        }:
+        ''
+          substituteInPlace ./scripts/vars.js --replace \
+            "exports.version = childProcess.execSync('git describe --tags', { encoding:'utf-8' })" \
+            "exports.version = '$version'"
 
-        ${pkgs.jq}/bin/jq ".typeAcquisition = {}" tsconfig.json \
-            | ${pkgs.moreutils}/bin/sponge tsconfig.json
+          ${pkgs.jq}/bin/jq ".typeAcquisition = {}" tsconfig.json \
+              | ${pkgs.moreutils}/bin/sponge tsconfig.json
 
-        substituteInPlace app/webpack.main.config.js --replace \
-          "configFile: path.resolve(__dirname, 'tsconfig.main.json')," \
-          "configFile: path.resolve(__dirname, 'tsconfig.main.json'), allowTsInNodeModules: true,"
+          substituteInPlace app/webpack.main.config.js --replace \
+            "configFile: path.resolve(__dirname, 'tsconfig.main.json')," \
+            "configFile: path.resolve(__dirname, 'tsconfig.main.json'), allowTsInNodeModules: true,"
 
-        substituteInPlace app/webpack.config.js --replace \
-          "configFile: path.resolve(__dirname, 'tsconfig.json')," \
-          "configFile: path.resolve(__dirname, 'tsconfig.json'), allowTsInNodeModules: true,"
+          substituteInPlace app/webpack.config.js --replace \
+            "configFile: path.resolve(__dirname, 'tsconfig.json')," \
+            "configFile: path.resolve(__dirname, 'tsconfig.json'), allowTsInNodeModules: true,"
 
-        substituteInPlace web/webpack.config.js --replace \
-          "configFile: path.resolve(__dirname, 'tsconfig.json')," \
-          "configFile: path.resolve(__dirname, 'tsconfig.json'), allowTsInNodeModules: true,"
+          substituteInPlace web/webpack.config.js --replace \
+            "configFile: path.resolve(__dirname, 'tsconfig.json')," \
+            "configFile: path.resolve(__dirname, 'tsconfig.json'), allowTsInNodeModules: true,"
 
-        otherModules=${pkgs.writeText "other-modules.json" (l.toJSON
-          (l.mapAttrs
-            (pname: subOutputs:
-            let
-              pkg = subOutputs.packages."${pname}".overrideAttrs (old: {
-                buildScript = "true";
-                installMethod = "copy";
-              });
-            in
-              "${pkg}/lib/node_modules/${pname}/node_modules")
-            outputs.subPackages))}
-
-        symlinksToCopies() {
-          local dir="$1"
-
-          echo "transforming symlinks to copies..."
-          for f in $(find -L "$dir" -xtype l); do
-            if [ -f $f ]; then
-              continue
-            fi
-            echo "copying $f"
-            chmod +wx $(dirname "$f")
-            mv "$f" "$f.bak"
-            mkdir "$f"
-            if [ -n "$(ls -A "$f.bak/")" ]; then
-              cp -r "$f.bak"/* "$f/"
-              chmod -R +w $f
-            fi
-            rm "$f.bak"
-          done
+          otherModules=${
+          pkgs.writeText "other-modules.json" (
+            l.toJSON
+            (
+              l.mapAttrs
+              (
+                pname: subOutputs: let
+                  pkg = subOutputs.packages."${pname}".overrideAttrs (
+                    old: {
+                      buildScript = "true";
+                      installMethod = "copy";
+                    }
+                  );
+                in
+                  "${pkg}/lib/node_modules/${pname}/node_modules"
+              )
+              outputs.subPackages
+            )
+          )
         }
 
-        for dir in $(ls -d */); do
-          if [ -f $dir/package.json ]; then
-            echo "installing sub-package $dir"
-            name=$(${pkgs.jq}/bin/jq -r '.name' $dir/package.json)
-            node_modules=$(${pkgs.jq}/bin/jq -r ".\"$name\"" $otherModules)
-            if [ "$node_modules" == "null" ]; then
-              node_modules=$(${pkgs.jq}/bin/jq -r ".\"''${dir%/}\"" $otherModules)
+          symlinksToCopies() {
+            local dir="$1"
+
+            echo "transforming symlinks to copies..."
+            for f in $(find -L "$dir" -xtype l); do
+              if [ -f $f ]; then
+                continue
+              fi
+              echo "copying $f"
+              chmod +wx $(dirname "$f")
+              mv "$f" "$f.bak"
+              mkdir "$f"
+              if [ -n "$(ls -A "$f.bak/")" ]; then
+                cp -r "$f.bak"/* "$f/"
+                chmod -R +w $f
+              fi
+              rm "$f.bak"
+            done
+          }
+
+          for dir in $(ls -d */); do
+            if [ -f $dir/package.json ]; then
+              echo "installing sub-package $dir"
+              name=$(${pkgs.jq}/bin/jq -r '.name' $dir/package.json)
+              node_modules=$(${pkgs.jq}/bin/jq -r ".\"$name\"" $otherModules)
+              if [ "$node_modules" == "null" ]; then
+                node_modules=$(${pkgs.jq}/bin/jq -r ".\"''${dir%/}\"" $otherModules)
+              fi
+              cp -r $node_modules $dir/node_modules
+              chmod -R +w $dir
             fi
-            cp -r $node_modules $dir/node_modules
-            chmod -R +w $dir
-          fi
-        done
-      '';
+          done
+        '';
     };
   };
 
@@ -701,12 +709,12 @@ in
   };
 
   usb-detection = {
-
     build = {
-
-      nativeBuildInputs = old: old ++ [
-        pkgs.libudev
-      ];
+      nativeBuildInputs = old:
+        old
+        ++ [
+          pkgs.libudev
+        ];
     };
   };
 
@@ -735,16 +743,18 @@ in
 
   # TODO: Maybe should replace binaries with the ones from nixpkgs
   "7zip-bin" = {
-
     patch-binaries = {
+      nativeBuildInputs = old:
+        old
+        ++ [
+          pkgs.autoPatchelfHook
+        ];
 
-      nativeBuildInputs = old: old ++ [
-        pkgs.autoPatchelfHook
-      ];
-
-      buildInputs = old: old ++ [
-        pkgs.gcc-unwrapped.lib
-      ];
+      buildInputs = old:
+        old
+        ++ [
+          pkgs.gcc-unwrapped.lib
+        ];
     };
   };
 
@@ -757,7 +767,6 @@ in
   };
 
   "@ledgerhq/ledger-core" = {
-
     build =
       let
         ledger-core-version = "4.2.0";
@@ -781,7 +790,6 @@ in
           url = "https://github.com/chfast/secp256k1/archive/ac8ccf29b8c6b2b793bc734661ce43d1f952977a.tar.gz";
           hash = "sha256-7i61CGd+xFvPQkyN7CI7eEoTtko0S77eY+DXEbd3BE8=";
         };
-
       in
         {
           buildInputs = [
@@ -803,9 +811,7 @@ in
   };
 
   "@mattermost/webapp" = {
-
     run-webpack = {
-
       # custom webpack config
       postPatch = ''
         substituteInPlace webpack.config.js --replace \
@@ -862,5 +868,4 @@ in
       '';
     };
   };
-
 }

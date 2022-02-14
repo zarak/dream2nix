@@ -1,9 +1,11 @@
 {
-  lib ? pkgs.lib,
-  pkgs ? import <nixpkgs> {},
-  dream2nix ? import ./src { inherit pkgs; },
+  lib ? pkgs.lib
+,
+  pkgs ? import <nixpkgs> { }
+,
+  dream2nix ? import ./src { inherit pkgs; }
+,
 }:
-
 let
   l = pkgs.lib // builtins;
 
@@ -14,7 +16,6 @@ let
   otherTests = import ./other {
     inherit lib pkgs dream2nix;
   };
-
 in
 buildProjectsTests
 //

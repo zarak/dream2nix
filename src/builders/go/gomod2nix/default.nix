@@ -1,16 +1,21 @@
 {
-  lib,
-  pkgs,
-  externals,
+  lib
+,
+  pkgs
+,
+  externals
+,
   ...
 }:
-
 {
-  fetchedSources,
-  dreamLock,
+  fetchedSources
+,
+  dreamLock
+,
 }:
 let
-  gomod2nixTOML = fetchedSources.mapAttrs
+  gomod2nixTOML =
+    fetchedSources.mapAttrs
     dependencyObject.goName;
 in
 externals.gomod2nixBuilder rec {

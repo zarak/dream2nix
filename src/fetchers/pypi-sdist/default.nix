@@ -1,19 +1,26 @@
 {
-  fetchurl,
-  python3,
-
-  utils,
+  fetchurl
+,
+  python3
+,
+  utils
+,
   ...
 }:
 {
-
   inputs = [ "pname" "version" ];
 
   versionField = "version";
 
   defaultUpdater = "pypiNewestReleaseVersion";
 
-  outputs = { pname, version, extension ? "tar.gz", }@inp:
+  outputs =
+    { pname
+    , version
+    , extension ? "tar.gz"
+    ,
+    }
+    @ inp:
     let
       b = builtins;
 
@@ -22,24 +29,28 @@
         "https://files.pythonhosted.org/packages/source/"
         + "${firstChar}/${pname}/${pname}-${version}.${extension}";
     in
-    {
+      {
+        calcHash = algo:
+          utils.hashPath algo (
+            b.fetchurl { inherit url; }
+          );
 
-      calcHash = algo: utils.hashPath algo (
-        b.fetchurl { inherit url; }
-      );
-
-      fetched = hash:
-        let
+        fetched = hash: let
           source =
-            (fetchurl {
-              inherit url;
-              sha256 = hash;
-            }).overrideAttrs (old: {
-              outputHashMode = "recursive";
-            });
+            (
+              fetchurl {
+                inherit url;
+                sha256 = hash;
+              }
+            )
+            .overrideAttrs (
+              old: {
+                outputHashMode = "recursive";
+              }
+            );
         in
           utils.extractSource {
             inherit source;
           };
-    };
+      };
 }
