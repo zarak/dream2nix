@@ -5,9 +5,10 @@
 
 let
   b = builtins;
+  l = lib // builtins;
 in
 
-{
+rec {
   translate =
     {
       translatorName,
@@ -208,6 +209,62 @@ in
         getDependencies = dependencyObject:
           dependencyObject.depsExact;
       });
+
+
+  # This function should return a list of projects
+  discover =
+    {
+      tree,
+      translatorInfo,
+    }:
+    if ! tree ? files."package-lock.json" then [] else
+    let
+
+      # returns all relative paths to workspaces defined by a glob
+      getWorkspacePaths = glob: dir:
+        if l.hasSuffix "*" glob then
+          let
+            prefix = l.removeSuffix "*" glob;
+            dirNames = dlib.listDirs "${dir.fullPath}/${prefix}";
+          in
+            b.map (dname: "${prefix}/${dname}") dirNames
+        else
+          [ glob ];
+
+      getPackageJson = dirPath:
+        l.fromJSON (l.readFile "${dirPath}/package.json");
+
+      getWorkspaces = dir:
+        let
+          packageJson = dir.files."package.json".jsonContent;
+        in
+          l.flatten
+            (l.forEach packageJson.workspaces
+              (glob:
+                let
+                  workspacePaths = getWorkspacePaths glob dir;
+                in
+                  l.forEach workspacePaths
+                    (wPath: {
+                      inherit translatorInfo;
+                      name = (getPackageJson "${dir.fullPath}/${wPath}").name or null;
+                      relPath = "${dir.relPath}/${wPath}";
+                    })));
+    in
+      # the current directory
+      [{
+        inherit translatorInfo;
+        inherit (tree) relPath;
+        name = tree.files."package.json".jsonContent.name or null;
+      }]
+      # workspaces defined by the current directory
+      ++
+      (getWorkspaces tree)
+      # sub-directories
+      ++
+      (l.mapAttrsToList
+        (dname: dir: discover { tree = dir; inherit translatorInfo; })
+        (tree.directories or {}));
 
 
   projectName =
