@@ -18,6 +18,7 @@ let
       prepareSourceTree
       readTextFile
       translators
+      sanitizeRelativePath
     ;
   };
 
@@ -57,39 +58,65 @@ let
       relPath' = relPath;
       fullPath' = "${sourceRoot}/${relPath}";
       current = l.readDir fullPath';
+
       fileNames =
         l.filterAttrs (n: v: v == "regular") current;
+
       directoryNames =
         l.filterAttrs (n: v: v == "directory") current;
+
+      makeNewPath = prefix: name:
+        if prefix == "" then
+          name
+        else
+          "${prefix}/name";
+
+      directories =
+        l.mapAttrs
+          (dname: _:
+            prepareSourceTreeInternal
+              sourceRoot
+              (makeNewPath relPath dname)
+              dname
+              (depth - 1))
+          directoryNames;
+
+      files =
+        l.mapAttrs
+          (fname: _: l.trace fname rec {
+            name = fname;
+            fullPath = "${fullPath'}/${fname}";
+            relPath = makeNewPath relPath fname;
+            content = readTextFile fullPath;
+            jsonContent = l.fromJSON content;
+            tomlContent = l.fromTOML content;
+          })
+          fileNames;
+
+      filesFlat =
+        l.mapAttrs'
+          (fname: file:
+            l.nameValuePair
+              file.relPath
+              file)
+          files;
+
+      directoriesFlat =
+        l.mapAttrs'
+          (fname: file:
+            l.nameValuePair
+              file.relPath
+              file)
+          directories;
     in
       {
-        inherit name relPath;
+        inherit name files filesFlat relPath;
 
         fullPath = fullPath';
-
-        files =
-          l.mapAttrs
-            (fname: _: l.trace fname rec {
-              name = fname;
-              fullPath = "${fullPath'}/${fname}";
-              relPath = "${relPath'}/${fname}";
-              content = readTextFile fullPath;
-              jsonContent = l.fromJSON content;
-              tomlContent = l.fromTOML content;
-            })
-            fileNames;
       }
-
+      # stop recursion if depth is reached
       // (l.optionalAttrs (depth > 0) {
-        directories =
-          l.mapAttrs
-            (dname: _:
-              prepareSourceTreeInternal
-                sourceRoot
-                "${relPath}/${dname}"
-                dname
-                (depth - 1))
-            directoryNames;
+        inherit directories directoriesFlat;
       });
 
 
@@ -132,6 +159,9 @@ let
     prepareSourceTreeInternal source "" "" depth;
 
   readTextFile = file: l.replaceStrings [ "\r\n" ] [ "\n" ] (l.readFile file);
+
+  sanitizeRelativePath = path:
+    l.removePrefix "/" (l.toString (l.toPath "/${path}"));
 
 in
 

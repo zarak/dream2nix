@@ -211,60 +211,95 @@ rec {
       });
 
 
-  # This function should return a list of projects
   discover =
     {
       tree,
       translatorInfo,
+
+      # Internal parameter preventing workspace projects from being discovered
+      # twice.
+      alreadyDiscovered ? {},
     }:
-    if ! tree ? files."package-lock.json" then [] else
-    let
+    if alreadyDiscovered ? "${tree.relPath}"
+        || ! tree ? files."package.json"
+    then
+      # this will be cleaned by `flatten`
+      []
+    else
+      let
 
-      # returns all relative paths to workspaces defined by a glob
-      getWorkspacePaths = glob: dir:
-        if l.hasSuffix "*" glob then
+        # returns all relative paths to workspaces defined by a glob
+        getWorkspacePaths = glob: dir:
+          if l.hasSuffix "*" glob then
+            let
+              prefix = l.removeSuffix "*" glob;
+              dirNames = dlib.listDirs "${dir.fullPath}/${prefix}";
+            in
+              b.map (dname: "${prefix}/${dname}") dirNames
+          else
+            [ glob ];
+
+        # returns the parsed package.json of a given directory
+        getPackageJson = dirPath:
+          l.fromJSON (l.readFile "${dirPath}/package.json");
+
+        # collect project info for workspaces defined by current package.json
+        getWorkspaces = dir:
           let
-            prefix = l.removeSuffix "*" glob;
-            dirNames = dlib.listDirs "${dir.fullPath}/${prefix}";
+            packageJson = dir.files."package.json".jsonContent;
           in
-            b.map (dname: "${prefix}/${dname}") dirNames
-        else
-          [ glob ];
+            l.flatten
+              (l.forEach packageJson.workspaces
+                (glob:
+                  let
+                    workspacePaths = getWorkspacePaths glob dir;
+                  in
+                    l.forEach workspacePaths
+                      (wPath: {
+                        inherit translatorInfo;
+                        name = (getPackageJson "${dir.fullPath}/${wPath}").name or null;
+                        relPath =
+                          dlib.sanitizeRelativePath "${dir.relPath}/${wPath}";
+                      })));
 
-      getPackageJson = dirPath:
-        l.fromJSON (l.readFile "${dirPath}/package.json");
+        # list of all projects infos found by the current iteration
+        foundProjects =
+          # the current directory
+          [{
+            inherit translatorInfo;
+            inherit (tree) relPath;
+            name = tree.files."package.json".jsonContent.name or null;
+          }]
 
-      getWorkspaces = dir:
-        let
-          packageJson = dir.files."package.json".jsonContent;
-        in
-          l.flatten
-            (l.forEach packageJson.workspaces
-              (glob:
-                let
-                  workspacePaths = getWorkspacePaths glob dir;
-                in
-                  l.forEach workspacePaths
-                    (wPath: {
-                      inherit translatorInfo;
-                      name = (getPackageJson "${dir.fullPath}/${wPath}").name or null;
-                      relPath = "${dir.relPath}/${wPath}";
-                    })));
-    in
-      # the current directory
-      [{
-        inherit translatorInfo;
-        inherit (tree) relPath;
-        name = tree.files."package.json".jsonContent.name or null;
-      }]
-      # workspaces defined by the current directory
-      ++
-      (getWorkspaces tree)
-      # sub-directories
-      ++
-      (l.mapAttrsToList
-        (dname: dir: discover { tree = dir; inherit translatorInfo; })
-        (tree.directories or {}));
+          # workspaces defined by the current directory
+          ++
+          (getWorkspaces tree);
+
+        # index of already found projects
+        # This is needed, because sub projects also contain a `package.json`,
+        # and would otherwise be discovered again as an independent project.
+        alreadyDiscovered' =
+          alreadyDiscovered
+          //
+          (l.genAttrs
+            (l.map (p: p.relPath) foundProjects)
+            (relPath: null));
+      in
+        # the current directory
+        foundProjects
+
+        # sub-directories
+        # Thanks to `alreadyDiscovered`, workspace projects won't be discovered
+        # a second time.
+        ++
+        l.flatten
+          ((l.mapAttrsToList
+            (dname: dir: discover {
+              inherit translatorInfo;
+              alreadyDiscovered = alreadyDiscovered';
+              tree = dir;
+            })
+            (tree.directories or {})));
 
 
   projectName =
