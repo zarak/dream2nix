@@ -13,6 +13,7 @@ let
       calcInvalidationHash
       containsMatchingFile
       dirNames
+      discoverers
       listDirs
       listFiles
       prepareSourceTree
@@ -24,6 +25,7 @@ let
 
   # other libs
   translators = import ./translators.nix { inherit dlib lib; };
+  discoverers = import ../discoverers { inherit dlib lib; };
 
 
   # INTERNAL
@@ -93,30 +95,15 @@ let
           })
           fileNames;
 
-      filesFlat =
-        l.mapAttrs'
-          (fname: file:
-            l.nameValuePair
-              file.relPath
-              file)
-          files;
-
-      directoriesFlat =
-        l.mapAttrs'
-          (fname: file:
-            l.nameValuePair
-              file.relPath
-              file)
-          directories;
     in
       {
-        inherit name files filesFlat relPath;
+        inherit name files relPath;
 
         fullPath = fullPath';
       }
       # stop recursion if depth is reached
       // (l.optionalAttrs (depth > 0) {
-        inherit directories directoriesFlat;
+        inherit directories;
       });
 
 
